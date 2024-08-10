@@ -187,18 +187,22 @@ import argparse
 def main():
     # initialization
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', '--frames', default=1_000, type=int, help='set frames')
+    parser.add_argument('-f', '--frames', default=100, type=int, help='set frames')
     parser.add_argument('-iv', '--interval', default=40, type=int, help='set interval between two frames')
     parser.add_argument('-s', '--size', default=20, type=int, help='set size of grid')
-    parser.add_argument('-sc', '--static-color', action="store_true", help='set scale of mass dynamin or static')
-    parser.add_argument('-v', '--vel', action="store_false", help='set vel show or not')
+    parser.add_argument('-sc', '--static-color', action='store_true', help='set scale of mass dynamin or static')
+    parser.add_argument('-nv', '--non-vel', action='store_true', help='set vel show or not')
+    parser.add_argument('-a', '--anim', action='store_true')
     args = parser.parse_args()
 
     frames = args.frames
     interval = args.interval
     siz = args.size
+    anim = args.anim
+    global dynamic_color, vel_show, fg, img, q
+    dynamic_color = not args.static_color
+    vel_show = not args.non_vel
 
-    global fg, img, q, dynamic_color, vel_show
     fg = FluidGrid(siz, siz)
     img = ax.imshow(fg.mass,
                     cmap='coolwarm',
@@ -206,15 +210,17 @@ def main():
                     norm=colors.LogNorm()
                     )
     fig.colorbar(img, cax=cax)
-    dynamic_color = not args.static_color
-    vel_show = args.vel
+
     if vel_show:
         q = ax.quiver(fg.X, fg.Y, fg.py / (fg.pl + 1e-8), fg.px / (fg.pl + 1e-8), fg.pl, scale=siz * 2.5)
 
     # animation
-    anim = FuncAnimation(fig, animation, frames=frames, interval=interval)
-    # FuncAnimation.save(anim, filename="output.mp4")
-    plt.show()
+    ani = FuncAnimation(fig, animation, frames=frames, interval=interval)
+
+    if anim:
+        FuncAnimation.save(ani, filename="output.mp4")
+    else:
+        plt.show()
 
 if __name__ == '__main__':
     main()
