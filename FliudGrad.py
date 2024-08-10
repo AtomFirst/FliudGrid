@@ -4,39 +4,28 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-plt.rcParams['figure.autolayout'] = True
-fig, ax = plt.subplots(1,1)
-div = make_axes_locatable(ax)
-cax = div.append_axes('right', '5%', '5%')
-tx = ax.set_title('start')
-img = None
-q = None
-
-fg = None
-
 class FluidGrid:
     @staticmethod
-    def diffusion(z, k):
-        return (z * (1-k)
-        + np.vstack((z[1:, ], z[-1, ])) * k/4
-        + np.vstack((z[0, ], z[:-1, ])) * k/4
-        + np.hstack((z[:, 1:], z[:, -1].reshape(-1, 1))) * k/4
-        + np.hstack((z[:, 0].reshape(-1, 1), z[:, :-1])) * k/4
+    def diffusion(m, dr, pc):
+        rm = (m * (1-dr)
+        + np.vstack((m[1:, ], m[-1, ])) * dr/4
+        + np.vstack((m[0, ], m[:-1, ])) * dr/4
+        + np.hstack((m[:, 1:], m[:, -1].reshape(-1, 1))) * dr/4
+        + np.hstack((m[:, 0].reshape(-1, 1), m[:, :-1])) * dr/4
         )
 
-    @staticmethod
-    def solvePress(m, k):
-        Fx = (np.hstack((m[:, 0].reshape(-1, 1), m[:, :-1])) 
-        - np.hstack((m[:, 1:], m[:, -1].reshape(-1, 1)))
-        ) * k
-        Fy = (np.vstack((m[0, ], m[:-1, ])) 
-        - np.vstack((m[1:, ], m[-1, ]))
-        ) * k
+        dpx = (-np.sqrt(np.hstack((m[:, 1:], m[:, -1].reshape(-1, 1))) * dr/4)
+        + np.sqrt(np.hstack((m[:, 0].reshape(-1, 1), m[:, :-1])) * dr/4)
+        ) * pc
 
-        return (Fx, Fy)
+        dpy = (-np.sqrt(np.vstack((m[1:, ], m[-1, ])) * dr/4)
+        + np.sqrt(np.vstack((m[0, ], m[:-1, ])) * dr/4)
+        ) * pc
+
+        return (rm, dpx, dpy)
         
     @staticmethod
-    def mechanical_motion(m, px, py, X, Y, vk, dt):
+    def mechanical_motion(m, px, py, X, Y, dt):
         dx = px / m * dt
         dy = py / m * dt
 
@@ -63,12 +52,6 @@ class FluidGrid:
         rpx = px * p00
         rpy = py * p00
         # very bad undefined behavior
-        def fuck(a, x, y, c):
-            xx = x.reshape(-1)
-            yy = y.reshape(-1)
-            cc = c.reshape(-1)
-            for i in range(len(xx)):
-                a[xx[i], yy[i]] += cc[i]
         '''
         rm[X + sdx, Y] += m * px0
         rpx[X + sdx, Y] += px * px0
@@ -80,6 +63,12 @@ class FluidGrid:
         rpx[X + sdx, Y + sdy] += px * pxy
         rpy[X + sdx, Y + sdy] += py * pxy
         '''
+        def fuck(a, x, y, c):
+            xx = x.reshape(-1)
+            yy = y.reshape(-1)
+            cc = c.reshape(-1)
+            for i in range(len(xx)):
+                a[xx[i], yy[i]] += cc[i]
         fuck(rm, X + sdx, Y, m * px0)
         fuck(rpx, X + sdx, Y, px * px0)
         fuck(rpy, X + sdx, Y, py * px0)
@@ -95,65 +84,89 @@ class FluidGrid:
         rpx[:, -1] *= rpx[:, -1] <0
         rpy[0, ] *= rpy[0, ] > 0
         rpy[-1, ] *= rpy[-1, ] < 0
-        
-        # vel loss
-        rpx *= vk
-        rpy *= vk
 
         # done at last...
         return (rm, rpx, rpy)
 
-    def __init__(self, height, width, dr=0.1, pc=3.0, vk=0.3, dt=0.02):
+    def __init__(self, height, width, dr=0.4, pc=0.5, vk=1.0, dt=0.2):
         self.height = height
         self.width = width
         self.diffusion_rate = dr
-        
         self.pressC = pc
         self.vel_keep = vk
         self.mmdt = dt
 
         self.X, self.Y = np.meshgrid(np.arange(width), np.arange(height))
         self.mass = np.abs(np.random.randn(height, width))
-        
-        self.px = np.random.randn(height, width) * self.mass * 0.2
-        self.py = np.random.randn(height, width) * self.mass * 0.2
-        self.color = np.sqrt(self.px ** 2 + self.py ** 2)
+        self.mass[width//2:, ] = 2.0
+        self.mass[:width//2, ] = 1.0
 
-    def update(self, k=None, dt=None):
-        if k == None:
-            k = self.pressC
+        self.px = np.zeros((height, width)) * self.mass * 0.2
+        self.py = np.zeros((height, width)) * self.mass * 0.2
+        self.pl = np.sqrt(self.px ** 2 + self.py ** 2)
 
-        Fx, Fy = FluidGrid.solvePress(self.mass, k)
+    def update(self, dr=None, pc=None, dt=None, vk=None):
+        # diffusion
+        if dr == None:
+            dr = self.diffusion_rate
+        if pc == None:
+            pc = self.pressC
+        self.mass, dpx, dpy = FluidGrid.diffusion(self.mass, dr, pc)
+        self.px += dpx
+        self.py += dpy
 
+        # mechanical motion
         if dt == None:
             dt = self.mmdt
-
-        self.px += Fx * dt
-        self.py += Fy * dt
-
         self.mass, self.px, self.py = FluidGrid.mechanical_motion(
-            self.mass, self.px, self.py, self.X, self.Y, self.vel_keep, dt
+            self.mass, self.px, self.py, self.X, self.Y, dt
         )
+
+        # vel loss
+        if vk == None:
+            vk = self.vel_keep
+        self.px *= vk
+        self.py *= vk
         
-        self.color = np.sqrt(self.px ** 2 + self.py ** 2)
-        print('mass: {:.2f}, Ev: {:.2f}, qwq: {:.2f}'.format(np.sum(self.mass), np.sum(self.color ** 2), np.linalg.norm(self.mass)))
+        self.pl = np.sqrt(self.px ** 2 + self.py ** 2)
+        print('mass: {:.2f}, sum_pl: {:.2f}, uniformity: {:.2f}'.format(np.sum(self.mass), np.sum(self.pl), np.linalg.norm(self.mass)))
+
+plt.rcParams['figure.autolayout'] = True
+fig, ax = plt.subplots(1,1)
+div = make_axes_locatable(ax)
+cax = div.append_axes('right', '5%', '5%')
+tx = ax.set_title('start')
+img = None
+q = None
+dynamic_color = True
+vel_show = True
+
+fg = None
 
 def render(step):
-    global img
     cax.cla()
-    img = ax.imshow(fg.mass,
-                    cmap='coolwarm',
-                    origin='lower',
-                    norm=colors.LogNorm()
-                    )
+
+    if dynamic_color:
+        global img
+        img = ax.imshow(fg.mass,
+                        cmap='coolwarm',
+                        origin='lower',
+                        norm=colors.LogNorm()
+                        )
+    else:
+        img.set_data(fg.mass)
+    
     fig.colorbar(img, cax=cax)
-    q.set_UVC(fg.px, fg.py)
+
+    if vel_show:
+        q.set_UVC(fg.px / (fg.pl + 1e-8), fg.py / (fg.pl + 1e-8), fg.pl)
+    
     tx.set_text('Frame {}'.format(step))
     print('rendering {} frame...'.format(step))
 
-def update(step):
+def animation(step):
     fg.update()
-    return render(step)
+    render(step)
 
 import argparse
 
@@ -161,15 +174,17 @@ def main():
     # initialization
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--frames', default=1_000, type=int, help='set frames')
-    parser.add_argument('-iv', '--interval', default=40, type=int, help='set interval')
-    parser.add_argument('-s', '--size', default=20, type=int, help='set size')
+    parser.add_argument('-iv', '--interval', default=40, type=int, help='set interval between two frames')
+    parser.add_argument('-s', '--size', default=20, type=int, help='set size of grid')
+    parser.add_argument('-dc', '--dynamic-color', action="store_false", help='set scale of mass dynamin or static')
+    parser.add_argument('-v', '--vel', action="store_false", help='set vel show or not')
     args = parser.parse_args()
 
     frames = args.frames
     interval = args.interval
     siz = args.size
 
-    global fg, img, q
+    global fg, img, q, dynamic_color, vel_show
     fg = FluidGrid(siz, siz)
     img = ax.imshow(fg.mass,
                     cmap='coolwarm',
@@ -177,10 +192,13 @@ def main():
                     norm=colors.LogNorm()
                     )
     fig.colorbar(img, cax=cax)
-    q = ax.quiver(fg.X, fg.Y, fg.px, fg.py, fg.color)
+    dynamic_color = args.dynamic_color
+    vel_show = args.vel
+    if vel_show:
+        q = ax.quiver(fg.X, fg.Y, fg.px / (fg.pl + 1e-8), fg.py / (fg.pl + 1e-8), fg.pl)
 
     # animation
-    anim = FuncAnimation(fig, update, frames=frames, interval=interval)
+    anim = FuncAnimation(fig, animation, frames=frames, interval=interval)
     # FuncAnimation.save(anim, filename="output.mp4")
     plt.show()
 
