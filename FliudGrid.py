@@ -6,28 +6,51 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 class FluidGrid:
     @staticmethod
-    def diffusion(m, dr, pc):
-        rm = (m * (1-dr)
-        + np.vstack((m[1:, ], m[-1, ])) * dr/4
-        + np.vstack((m[0, ], m[:-1, ])) * dr/4
-        + np.hstack((m[:, 1:], m[:, -1].reshape(-1, 1))) * dr/4
-        + np.hstack((m[:, 0].reshape(-1, 1), m[:, :-1])) * dr/4
-        )
+    def goodiv(x):
+        return np.maximum(x, 1e-8)
 
-        dpx = (-np.sqrt(np.hstack((m[:, 1:], m[:, -1].reshape(-1, 1))) * dr/4)
+    @staticmethod
+    def diffusion(m, px, py, dr, pc):
+        dmx = np.diff(m, axis=1) * dr
+        dmy = np.diff(m, axis=0) * dr
+
+        # mass transition
+        rm = m.copy()
+        rm[:, :-1] += dmx
+        rm[:, 1:] -= dmx
+        rm[:-1, ] += dmy
+        rm[1:, ] -= dmy
+
+        # momentum transition 
+        rpx = px.copy()
+        # r2l means moving from right cells to left cells
+        m = FluidGrid.goodiv(m)
+        dpxr2l = (dmx > 0) * dmx / m[:, 1:] * px[:, 1:]
+        dpxl2r = (dmx < 0) * (-dmx) / m[:, :-1] * px[:, :-1]
+        rpx[:, :-1] += dpxr2l - dpxl2r
+        rpx[:, 1:] += dpxl2r - dpxr2l
+        rpy = py.copy()
+        dpyu2d = (dmy > 0) * dmy / m[1:, ] * px[1:, ]
+        dpyd2u = (dmy < 0) * (-dmy) / m[:-1, ] * px[:-1, ]
+        rpy[:-1, ] += dpyu2d - dpyd2u
+        rpy[1:, ] += dpyd2u -dpyu2d
+
+        # pressure do work
+        rpx += (-np.sqrt(np.hstack((m[:, 1:], m[:, -1].reshape(-1, 1))) * dr/4)
         + np.sqrt(np.hstack((m[:, 0].reshape(-1, 1), m[:, :-1])) * dr/4)
         ) * pc
 
-        dpy = (-np.sqrt(np.vstack((m[1:, ], m[-1, ])) * dr/4)
+        rpy += (-np.sqrt(np.vstack((m[1:, ], m[-1, ])) * dr/4)
         + np.sqrt(np.vstack((m[0, ], m[:-1, ])) * dr/4)
         ) * pc
 
-        return (rm, dpx, dpy)
+        return (rm, rpx, rpy)
         
     @staticmethod
     def mechanical_motion(m, px, py, X, Y, dt):
-        dx = px / (m + 1e-8) * dt
-        dy = py / (m + 1e-8) * dt
+        m = FluidGrid.goodiv(m)
+        dx = px / m * dt
+        dy = py / m * dt
 
         # symbols of dx, dy
         sdx = (dx > 0) * 2 - 1
@@ -52,32 +75,21 @@ class FluidGrid:
         rpx = px * p00
         rpy = py * p00
         # very bad undefined behavior
-        '''
-        rm[X + sdx, Y] += m * px0
-        rpx[X + sdx, Y] += px * px0
-        rpy[X + sdx, Y] += py * px0
-        rm[X, Y + sdy] += m * p0y
-        rpx[X, Y + sdy] += px * p0y
-        rpy[X, Y + sdy] += py * p0y
-        rm[X + sdx, Y + sdy] += m * pxy
-        rpx[X + sdx, Y + sdy] += px * pxy
-        rpy[X + sdx, Y + sdy] += py * pxy
-        '''
-        def fuck(a, y, x, c):
+        def add_to(a, y, x, c):
             yy = y.reshape(-1)
             xx = x.reshape(-1)
             cc = c.reshape(-1)
             for i in range(len(yy)):
                 a[yy[i], xx[i]] += cc[i]
-        fuck(rm, Y + sdy, X, m * p0y)
-        fuck(rpx, Y + sdy, X, px * p0y)
-        fuck(rpy, Y + sdy, X, py * p0y)
-        fuck(rm, Y, X + sdx, m * px0)
-        fuck(rpx, Y, X + sdx, px * px0)
-        fuck(rpy, Y, X + sdx, py * px0)
-        fuck(rm, Y + sdy, X + sdx, m * pxy)
-        fuck(rpx, Y + sdy, X + sdx, px * pxy)
-        fuck(rpy, Y + sdy, X + sdx, py * pxy)
+        add_to(rm, Y + sdy, X, m * p0y)
+        add_to(rpx, Y + sdy, X, px * p0y)
+        add_to(rpy, Y + sdy, X, py * p0y)
+        add_to(rm, Y, X + sdx, m * px0)
+        add_to(rpx, Y, X + sdx, px * px0)
+        add_to(rpy, Y, X + sdx, py * px0)
+        add_to(rm, Y + sdy, X + sdx, m * pxy)
+        add_to(rpx, Y + sdy, X + sdx, px * pxy)
+        add_to(rpy, Y + sdy, X + sdx, py * pxy)
 
         # boundary
         rpx[:, 0] *= rpx[:, 0] > 0
@@ -88,7 +100,7 @@ class FluidGrid:
         # done at last...
         return (rm, rpx, rpy)
 
-    def __init__(self, height, width, dr=0.1, pc=0.2, vk=0.99, g=0.2, dt=0.2):
+    def __init__(self, height, width, dr=0.025, pc=0.2, vk=0.99, g=0.2, dt=0.2):
         self.height = height
         self.width = width
         self.diffusion_rate = dr
@@ -123,9 +135,7 @@ class FluidGrid:
             dr = self.diffusion_rate
         if pc == None:
             pc = self.pressC
-        self.mass, dpx, dpy = FluidGrid.diffusion(self.mass, dr, pc)
-        self.px += dpx
-        self.py += dpy
+        self.mass, self.px, self.py = FluidGrid.diffusion(self.mass, self.px, self.py, dr, pc)
 
         # gravity
         if g == None:
@@ -153,7 +163,7 @@ class FluidGrid:
             self.dd -= 1
 
         self.pl = np.sqrt(self.px ** 2 + self.py ** 2)
-        print('mass: {:.2f}, sum_pl: {:.2f}, uniformity: {:.2f}'.format(np.sum(self.mass), np.sum(self.pl), np.linalg.norm(self.mass)))
+        #print('mass: {:.2f}, sum_pl: {:.2f}, uniformity: {:.2f}'.format(np.sum(self.mass), np.sum(self.pl), np.linalg.norm(self.mass)))
 
 plt.rcParams['figure.autolayout'] = True
 fig, ax = plt.subplots(1,1)
@@ -181,10 +191,11 @@ def render(step):
         img.set_data(fg.mass)
 
     if vel_show:
-        q.set_UVC(fg.px / (fg.pl + 1e-8), fg.py / (fg.pl + 1e-8), fg.pl)
+        fg.pl = FluidGrid.goodiv(fg.pl)
+        q.set_UVC(fg.px / fg.pl, fg.py / fg.pl, fg.pl)
     
     tx.set_text('Frame {}'.format(step))
-    print('rendering {} frame...'.format(step))
+    #print('rendering {} frame...'.format(step))
 
 def animation(step):
     for _ in range(2):
@@ -221,7 +232,8 @@ def main():
     fig.colorbar(img, cax=cax)
 
     if vel_show:
-        q = ax.quiver(fg.X, fg.Y, fg.px / (fg.pl + 1e-8), fg.py / (fg.pl + 1e-8), fg.pl, scale=siz * 2.5)
+        fg.pl = FluidGrid.goodiv(fg.pl)
+        q = ax.quiver(fg.X, fg.Y, fg.px / fg.pl, fg.py / fg.pl, fg.pl, scale=siz * 2.5)
 
     # animation
     ani = FuncAnimation(fig, animation, frames=frames, interval=interval)
