@@ -63,21 +63,21 @@ class FluidGrid:
         rpx[X + sdx, Y + sdy] += px * pxy
         rpy[X + sdx, Y + sdy] += py * pxy
         '''
-        def fuck(a, x, y, c):
-            xx = x.reshape(-1)
+        def fuck(a, y, x, c):
             yy = y.reshape(-1)
+            xx = x.reshape(-1)
             cc = c.reshape(-1)
-            for i in range(len(xx)):
-                a[xx[i], yy[i]] += cc[i]
-        fuck(rm, X + sdx, Y, m * px0)
-        fuck(rpx, X + sdx, Y, px * px0)
-        fuck(rpy, X + sdx, Y, py * px0)
-        fuck(rm, X, Y + sdy, m * p0y)
-        fuck(rpx, X, Y + sdy, px * p0y)
-        fuck(rpy, X, Y + sdy, py * p0y)
-        fuck(rm, X + sdx, Y + sdy, m * pxy)
-        fuck(rpx, X + sdx, Y + sdy, px * pxy)
-        fuck(rpy, X + sdx, Y + sdy, py * pxy)
+            for i in range(len(yy)):
+                a[yy[i], xx[i]] += cc[i]
+        fuck(rm, Y + sdy, X, m * p0y)
+        fuck(rpx, Y + sdy, X, px * p0y)
+        fuck(rpy, Y + sdy, X, py * p0y)
+        fuck(rm, Y, X + sdx, m * px0)
+        fuck(rpx, Y, X + sdx, px * px0)
+        fuck(rpy, Y, X + sdx, py * px0)
+        fuck(rm, Y + sdy, X + sdx, m * pxy)
+        fuck(rpx, Y + sdy, X + sdx, px * pxy)
+        fuck(rpy, Y + sdy, X + sdx, py * pxy)
 
         # boundary
         rpx[:, 0] *= rpx[:, 0] > 0
@@ -95,17 +95,27 @@ class FluidGrid:
         self.pressC = pc
         self.vel_keep = vk
         self.mmdt = dt
-
         self.X, self.Y = np.meshgrid(np.arange(width), np.arange(height))
-        self.mass = np.abs(np.random.randn(height, width))
-        self.mass[width//2:, ] = 2.0
-        self.mass[:width//2, ] = 1.0
 
-        self.px = np.zeros((height, width)) * self.mass * 0.2
-        self.py = np.zeros((height, width)) * self.mass * 0.2
+        self.mass = np.abs(np.random.randn(height, width))
+        self.px = np.zeros((height, width)) * self.mass
+        self.py = np.zeros((height, width)) * self.mass
+        
+        # exp
+        self.mass = np.zeros_like(self.mass)
+        self.mass += 1e-3
+        self.mass[height//2, width//2] = 1
+        self.px = np.zeros_like(self.px)
+        self.py = np.zeros_like(self.py)
+
         self.pl = np.sqrt(self.px ** 2 + self.py ** 2)
 
+    def debug(self, hint):
+        return
+        print(hint, self.mass, self.px, self.py, '\n', sep='\n')
+
     def update(self, dr=None, pc=None, dt=None, vk=None):
+        self.debug('0')
         # diffusion
         if dr == None:
             dr = self.diffusion_rate
@@ -115,6 +125,7 @@ class FluidGrid:
         self.px += dpx
         self.py += dpy
 
+        self.debug('diff')
         # mechanical motion
         if dt == None:
             dt = self.mmdt
@@ -122,6 +133,7 @@ class FluidGrid:
             self.mass, self.px, self.py, self.X, self.Y, dt
         )
 
+        self.debug('mech')
         # vel loss
         if vk == None:
             vk = self.vel_keep
@@ -129,6 +141,8 @@ class FluidGrid:
         self.py *= vk
         
         self.pl = np.sqrt(self.px ** 2 + self.py ** 2)
+
+        self.debug('vel loss')
         print('mass: {:.2f}, sum_pl: {:.2f}, uniformity: {:.2f}'.format(np.sum(self.mass), np.sum(self.pl), np.linalg.norm(self.mass)))
 
 plt.rcParams['figure.autolayout'] = True
@@ -159,7 +173,7 @@ def render(step):
     fig.colorbar(img, cax=cax)
 
     if vel_show:
-        q.set_UVC(fg.px / (fg.pl + 1e-8), fg.py / (fg.pl + 1e-8), fg.pl)
+        q.set_UVC(fg.py / (fg.pl + 1e-8), fg.px / (fg.pl + 1e-8), fg.pl)
     
     tx.set_text('Frame {}'.format(step))
     print('rendering {} frame...'.format(step))
@@ -176,7 +190,7 @@ def main():
     parser.add_argument('-f', '--frames', default=1_000, type=int, help='set frames')
     parser.add_argument('-iv', '--interval', default=40, type=int, help='set interval between two frames')
     parser.add_argument('-s', '--size', default=20, type=int, help='set size of grid')
-    parser.add_argument('-dc', '--dynamic-color', action="store_false", help='set scale of mass dynamin or static')
+    parser.add_argument('-sc', '--static-color', action="store_true", help='set scale of mass dynamin or static')
     parser.add_argument('-v', '--vel', action="store_false", help='set vel show or not')
     args = parser.parse_args()
 
@@ -192,10 +206,10 @@ def main():
                     norm=colors.LogNorm()
                     )
     fig.colorbar(img, cax=cax)
-    dynamic_color = args.dynamic_color
+    dynamic_color = not args.static_color
     vel_show = args.vel
     if vel_show:
-        q = ax.quiver(fg.X, fg.Y, fg.px / (fg.pl + 1e-8), fg.py / (fg.pl + 1e-8), fg.pl)
+        q = ax.quiver(fg.X, fg.Y, fg.py / (fg.pl + 1e-8), fg.px / (fg.pl + 1e-8), fg.pl, scale=siz * 2.5)
 
     # animation
     anim = FuncAnimation(fig, animation, frames=frames, interval=interval)
