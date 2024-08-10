@@ -88,7 +88,7 @@ class FluidGrid:
         # done at last...
         return (rm, rpx, rpy)
 
-    def __init__(self, height, width, dr=0.1, pc=0.2, vk=0.99, g=1.0, dt=0.2):
+    def __init__(self, height, width, dr=0.1, pc=0.2, vk=0.99, g=0.2, dt=0.2):
         self.height = height
         self.width = width
         self.diffusion_rate = dr
@@ -103,12 +103,14 @@ class FluidGrid:
         self.py = np.zeros((height, width)) * self.mass
         
         # exp
+        self.dd = 0
+        '''
         self.mass = np.zeros_like(self.mass)
         self.mass += 1e-3
         self.mass[height // 2 - 1 : height // 2 + 2 , width // 2 - 1 : height // 2 + 2] = 1
         self.px = np.zeros_like(self.px)
         self.py = np.zeros_like(self.py)
-
+        '''
         self.pl = np.sqrt(self.px ** 2 + self.py ** 2)
 
     def debug(self, hint):
@@ -116,7 +118,6 @@ class FluidGrid:
         print(hint, self.mass, self.px, self.py, '\n', sep='\n')
 
     def update(self, dr=None, pc=None, g=None, dt=None, vk=None):
-        self.debug('0')
         # diffusion
         if dr == None:
             dr = self.diffusion_rate
@@ -133,22 +134,25 @@ class FluidGrid:
             dt = self.mmdt
         self.py -= self.mass * g * dt
 
-        self.debug('diff')
         # mechanical motion
         self.mass, self.px, self.py = FluidGrid.mechanical_motion(
             self.mass, self.px, self.py, self.X, self.Y, dt
         )
 
-        self.debug('mech')
         # vel loss
         if vk == None:
             vk = self.vel_keep
         self.px *= vk
         self.py *= vk
         
-        self.pl = np.sqrt(self.px ** 2 + self.py ** 2)
+        # spring
+        if self.py[self.height // 2, self.width // 2] <= 0:
+            self.py[0, self.width // 2] += self.dd
+            self.dd += 1
+        elif self.dd > 0:
+            self.dd -= 1
 
-        self.debug('vel loss')
+        self.pl = np.sqrt(self.px ** 2 + self.py ** 2)
         print('mass: {:.2f}, sum_pl: {:.2f}, uniformity: {:.2f}'.format(np.sum(self.mass), np.sum(self.pl), np.linalg.norm(self.mass)))
 
 plt.rcParams['figure.autolayout'] = True
@@ -183,7 +187,7 @@ def render(step):
     print('rendering {} frame...'.format(step))
 
 def animation(step):
-    for _ in range(1):
+    for _ in range(2):
         fg.update()
     render(step)
 
