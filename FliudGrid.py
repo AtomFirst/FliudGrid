@@ -26,8 +26,8 @@ class FluidGrid:
         
     @staticmethod
     def mechanical_motion(m, px, py, X, Y, dt):
-        dx = px / m * dt
-        dy = py / m * dt
+        dx = px / (m + 1e-8) * dt
+        dy = py / (m + 1e-8) * dt
 
         # symbols of dx, dy
         sdx = (dx > 0) * 2 - 1
@@ -88,12 +88,13 @@ class FluidGrid:
         # done at last...
         return (rm, rpx, rpy)
 
-    def __init__(self, height, width, dr=0.4, pc=0.5, vk=1.0, dt=0.2):
+    def __init__(self, height, width, dr=0.1, pc=0.2, vk=0.99, g=1.0, dt=0.2):
         self.height = height
         self.width = width
         self.diffusion_rate = dr
         self.pressC = pc
         self.vel_keep = vk
+        self.g = g
         self.mmdt = dt
         self.X, self.Y = np.meshgrid(np.arange(width), np.arange(height))
 
@@ -104,7 +105,7 @@ class FluidGrid:
         # exp
         self.mass = np.zeros_like(self.mass)
         self.mass += 1e-3
-        self.mass[height//2, width//2] = 1
+        self.mass[height // 2 - 1 : height // 2 + 2 , width // 2 - 1 : height // 2 + 2] = 1
         self.px = np.zeros_like(self.px)
         self.py = np.zeros_like(self.py)
 
@@ -114,7 +115,7 @@ class FluidGrid:
         return
         print(hint, self.mass, self.px, self.py, '\n', sep='\n')
 
-    def update(self, dr=None, pc=None, dt=None, vk=None):
+    def update(self, dr=None, pc=None, g=None, dt=None, vk=None):
         self.debug('0')
         # diffusion
         if dr == None:
@@ -125,10 +126,15 @@ class FluidGrid:
         self.px += dpx
         self.py += dpy
 
-        self.debug('diff')
-        # mechanical motion
+        # gravity
+        if g == None:
+            g = self.g
         if dt == None:
             dt = self.mmdt
+        self.py -= self.mass * g * dt
+
+        self.debug('diff')
+        # mechanical motion
         self.mass, self.px, self.py = FluidGrid.mechanical_motion(
             self.mass, self.px, self.py, self.X, self.Y, dt
         )
@@ -158,8 +164,6 @@ vel_show = True
 fg = None
 
 def render(step):
-    cax.cla()
-
     if dynamic_color:
         global img
         img = ax.imshow(fg.mass,
@@ -167,19 +171,20 @@ def render(step):
                         origin='lower',
                         norm=colors.LogNorm()
                         )
+        cax.cla()
+        fig.colorbar(img, cax=cax)
     else:
         img.set_data(fg.mass)
-    
-    fig.colorbar(img, cax=cax)
 
     if vel_show:
-        q.set_UVC(fg.py / (fg.pl + 1e-8), fg.px / (fg.pl + 1e-8), fg.pl)
+        q.set_UVC(fg.px / (fg.pl + 1e-8), fg.py / (fg.pl + 1e-8), fg.pl)
     
     tx.set_text('Frame {}'.format(step))
     print('rendering {} frame...'.format(step))
 
 def animation(step):
-    fg.update()
+    for _ in range(1):
+        fg.update()
     render(step)
 
 import argparse
@@ -187,7 +192,7 @@ import argparse
 def main():
     # initialization
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', '--frames', default=100, type=int, help='set frames')
+    parser.add_argument('-f', '--frames', default=1_000, type=int, help='set frames')
     parser.add_argument('-iv', '--interval', default=40, type=int, help='set interval between two frames')
     parser.add_argument('-s', '--size', default=20, type=int, help='set size of grid')
     parser.add_argument('-sc', '--static-color', action='store_true', help='set scale of mass dynamin or static')
@@ -212,7 +217,7 @@ def main():
     fig.colorbar(img, cax=cax)
 
     if vel_show:
-        q = ax.quiver(fg.X, fg.Y, fg.py / (fg.pl + 1e-8), fg.px / (fg.pl + 1e-8), fg.pl, scale=siz * 2.5)
+        q = ax.quiver(fg.X, fg.Y, fg.px / (fg.pl + 1e-8), fg.py / (fg.pl + 1e-8), fg.pl, scale=siz * 2.5)
 
     # animation
     ani = FuncAnimation(fig, animation, frames=frames, interval=interval)
