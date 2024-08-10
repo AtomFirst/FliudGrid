@@ -36,12 +36,12 @@ class FluidGrid:
         rpy[1:, ] += dpyd2u -dpyu2d
 
         # pressure do work
-        rpx += (-np.sqrt(np.hstack((m[:, 1:], m[:, -1].reshape(-1, 1))) * dr/4)
-        + np.sqrt(np.hstack((m[:, 0].reshape(-1, 1), m[:, :-1])) * dr/4)
+        rpx += (-np.sqrt(np.hstack((m[:, 1:], m[:, -1].reshape(-1, 1))) * dr)
+        + np.sqrt(np.hstack((m[:, 0].reshape(-1, 1), m[:, :-1])) * dr)
         ) * pc
 
-        rpy += (-np.sqrt(np.vstack((m[1:, ], m[-1, ])) * dr/4)
-        + np.sqrt(np.vstack((m[0, ], m[:-1, ])) * dr/4)
+        rpy += (-np.sqrt(np.vstack((m[1:, ], m[-1, ])) * dr)
+        + np.sqrt(np.vstack((m[0, ], m[:-1, ])) * dr)
         ) * pc
 
         return (rm, rpx, rpy)
@@ -61,9 +61,12 @@ class FluidGrid:
         sdy[-1, ] *= sdy[-1, ] <= 0
         
         # abs of dx, dy
-        adx = np.minimum(np.abs(dx), np.ones_like(dx))
-        ady = np.minimum(np.abs(dy), np.ones_like(dy))
-        
+        adx = np.abs(dx) 
+        ady = np.abs(dy)
+        k = np.maximum(np.maximum(adx, ady), 1)
+        adx /= k
+        ady /= k
+
         # proportion of each part
         p00 = (1 - adx) * (1 - ady)
         px0 = adx * (1 - ady)
@@ -117,11 +120,11 @@ class FluidGrid:
         # exp
         self.dd = 0
         '''
-        self.mass = np.zeros_like(self.mass)
+        self.mass *= 0
         self.mass += 1e-3
-        self.mass[height // 2 - 1 : height // 2 + 2 , width // 2 - 1 : height // 2 + 2] = 1
-        self.px = np.zeros_like(self.px)
-        self.py = np.zeros_like(self.py)
+        self.mass[height // 2 - 1 : height // 2 + 2 , width // 2 - 1 : width // 2 + 2] = 1
+        self.px *= 0
+        self.py *= 0
         '''
         self.pl = np.sqrt(self.px ** 2 + self.py ** 2)
 
@@ -156,11 +159,15 @@ class FluidGrid:
         self.py *= vk
         
         # spring
-        if self.py[self.height // 2, self.width // 2] <= 0:
+        if self.py[self.height // 3, self.width // 2] <= 0:
             self.py[0, self.width // 2] += self.dd
             self.dd += 1
         elif self.dd > 0:
             self.dd -= 1
+        
+        # spring2
+        #self.py[0, self.width // 4] += 4
+        #self.px[0, self.width // 4] += 1
 
         self.pl = np.sqrt(self.px ** 2 + self.py ** 2)
         #print('mass: {:.2f}, sum_pl: {:.2f}, uniformity: {:.2f}'.format(np.sum(self.mass), np.sum(self.pl), np.linalg.norm(self.mass)))
@@ -179,7 +186,8 @@ fg = None
 
 def render(step):
     if dynamic_color:
-        global img
+        global img, fg
+        fg.mass = FluidGrid.goodiv(fg.mass)
         img = ax.imshow(fg.mass,
                         cmap='coolwarm',
                         origin='lower',
