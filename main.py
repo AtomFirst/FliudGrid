@@ -49,9 +49,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--frames', default=1_000, type=int, help='set frames')
     parser.add_argument('-iv', '--interval', default=40, type=int, help='set interval between two frames')
-    parser.add_argument('-s', '--size', default=20, type=int, help='set size of grid')
-    parser.add_argument('-sc', '--static-color', action='store_true', help='set scale of mass dynamin or static')
-    parser.add_argument('-nv', '--non-vel', action='store_true', help='set vel show or not')
+    parser.add_argument('-s', '--size', default=49, type=int, help='set size of grid')
+    parser.add_argument('-dc', '--dynamic-color', action='store_true', help='set scale of mass dynamin or static')
+    parser.add_argument('-vs', '--vel-show', action='store_true', help='set vel show or not')
     parser.add_argument('-a', '--anim', action='store_true')
     args = parser.parse_args()
 
@@ -61,8 +61,8 @@ def main():
     anim = args.anim
 
     global dynamic_color, vel_show, fg, img, q
-    dynamic_color = not args.static_color
-    vel_show = not args.non_vel
+    dynamic_color = args.dynamic_color
+    vel_show = args.vel_show
 
     # fg init here!
     fg = FluidGrid.FluidGrid(
@@ -93,14 +93,14 @@ def main():
 
 # Your own code begin ->
 
-def f(mass, px, py):
+def thrower(mass, px, py):
     height, width = mass.shape
     my, mx = 2, width // 3
     px[my-1:my+2, mx-1:mx+2] += mass[my-1:my+2, mx-1:mx+2] * 2
     py[my-1:my+2, mx-1:mx+2] += mass[my-1:my+2, mx-1:mx+2] * 2
     return (mass, px, py)
 
-def g(mass, px, py):
+def spin(mass, px, py):
     h, w = mass.shape
     my, mx = h // 2, w // 2
     px[my-h//5, mx] += mass[my-h//2, mx] * 2
@@ -126,14 +126,6 @@ def make_spring(vel=0.0, step=0.05):
         return (mass, px, py)
     
     return spring
-
-def spring2(mass, px, py):
-    height, width = mass.shape
-    
-    py[0, width // 4] += 4
-    px[0, width // 4] += 1
-
-    return (mass, px, py)
 
 def center33(height, width):
     mass = np.zeros((height, width)) + 1e-3
