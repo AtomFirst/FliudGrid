@@ -1,7 +1,20 @@
 import numpy as np
 
-def goodiv(x):
-    return np.maximum(x, 1e-8)
+def goodiv(x, minv=1e-8):
+    return np.maximum(x, minv)
+
+def friction(px, py, mu):
+    dpx = np.diff(px, axis=1) * mu
+    dpy = np.diff(py, axis=0) * mu
+
+    rpx = px.copy()
+    rpy = py.copy()
+    rpx[:, :-1] += dpx
+    rpx[:, 1:] -= dpx
+    rpy[:-1, ] += dpy
+    rpy[1:, ] -= dpy
+
+    return (rpx, rpy)
 
 def diffusion(m, px, py, dr, pc):
     dmx = np.diff(m, axis=1) * dr
@@ -55,9 +68,16 @@ def mechanical_motion(m, px, py, X, Y, dt):
     # abs of dx, dy
     adx = np.abs(dx) 
     ady = np.abs(dy)
-    k = np.maximum(np.maximum(adx, ady), 1)
-    adx /= k
-    ady /= k
+    # if dx, dy > 1
+    if True:
+        # angle keep
+        k = np.maximum(np.maximum(adx, ady), 1)
+        adx /= k
+        ady /= k
+    else:
+        # angle not keep
+        adx = np.minimum(adx, 1)
+        ady = np.minimum(ady, 1)
 
     # proportion of each part
     p00 = (1 - adx) * (1 - ady)
@@ -103,7 +123,7 @@ def randn_status_init(height, width):
     return (mass, px, py)
 
 class FluidGrid:
-    def __init__(self, height, width, dr=0.025, pc=0.2, vk=0.99, g=0.2, dt=0.2, 
+    def __init__(self, height, width, dr=0.025, pc=0.2, vk=0.99, g=0.2, dt=0.2, mu=0.1,  
                  status_init_func=randn_status_init, status_update_func=None):
         self.height = height
         self.width = width
@@ -112,6 +132,7 @@ class FluidGrid:
         self.vel_keep = vk
         self.g = g
         self.mmdt = dt
+        self.mu = mu
         self.X, self.Y = np.meshgrid(np.arange(width), np.arange(height))
 
         self.mass, self.px, self.py = status_init_func(height, width)
@@ -121,13 +142,18 @@ class FluidGrid:
     #def debug(self, hint):
     #    print(hint, self.mass, self.px, self.py, '\n', sep='\n')
 
-    def update(self, dr=None, pc=None, g=None, dt=None, vk=None):
+    def update(self, dr=None, pc=None, g=None, dt=None, vk=None, mu=None):
         # diffusion
         if dr == None:
             dr = self.diffusion_rate
         if pc == None:
             pc = self.pressC
         self.mass, self.px, self.py = diffusion(self.mass, self.px, self.py, dr, pc)
+
+        # friction
+        if mu == None:
+            mu = self.mu
+        self.px, self.py = friction(self.px, self.py, mu)
 
         # gravity
         if g == None:

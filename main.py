@@ -65,7 +65,12 @@ def main():
     vel_show = not args.non_vel
 
     # fg init here!
-    fg = FluidGrid.FluidGrid(siz, siz, status_update_func=make_spring())
+    fg = FluidGrid.FluidGrid(
+        siz, siz, 
+        #g=0,
+        #status_init_func=center33,
+        status_update_func=f,
+        )
 
     img = ax.imshow(fg.mass,
                     cmap='coolwarm',
@@ -76,7 +81,7 @@ def main():
 
     if vel_show:
         fg.pl = FluidGrid.goodiv(fg.pl)
-        q = ax.quiver(fg.X, fg.Y, fg.px / fg.pl, fg.py / fg.pl, fg.pl, scale=siz * 2.5)
+        q = ax.quiver(fg.X, fg.Y, fg.px / fg.pl, fg.py / fg.pl, fg.pl, scale=siz * 2.5, pivot='mid')
 
     # animation
     ani = FuncAnimation(fig, animation, frames=frames, interval=interval)
@@ -88,16 +93,23 @@ def main():
 
 # Your own code begin ->
 
-def make_spring(acc=0):
+def f(mass, px, py):
+    height, width = mass.shape
+    my, mx = 2, width // 3
+    px[my-1:my+2, mx-1:mx+2] += mass[my-1:my+2, mx-1:mx+2] * 2
+    py[my-1:my+2, mx-1:mx+2] += mass[my-1:my+2, mx-1:mx+2] * 2
+    return (mass, px, py)
+
+def make_spring(vel=0.0, step=0.05, k=0.01):
     def spring(mass, px, py):
-        nonlocal acc
+        nonlocal vel
         height, width = mass.shape
 
         if py[height // 4, width // 2] <= 0:
-            py[0, width // 2] += acc
-            acc += 1
-        elif acc > 0:
-            acc -= 1
+            vel += step
+            py[1, width // 2] = mass[1, width // 2] * vel
+        else:
+            vel -= step
 
         return (mass, px, py)
     
@@ -120,7 +132,7 @@ def center33(height, width):
 
     return (mass, px, py)
 
-# Your own code end
+# <- Your own code end
 
 if __name__ == '__main__':
     main()
