@@ -68,8 +68,8 @@ def main():
     fg = FluidGrid.FluidGrid(
         siz, siz, 
         #g=0,
-        status_init_func=center33,
-        #status_update_func=f,
+        #status_init_func=center33,
+        status_update_func=make_spring(),
         )
 
     img = ax.imshow(fg.mass,
@@ -109,15 +109,18 @@ def g(mass, px, py):
     py[my, mx+w//5] += mass[my, mx+w//2] * 2
     return (mass, px, py)
 
-def make_spring(vel=0.0, step=0.05, k=0.01):
+def make_spring(vel=0.0, step=0.05):
     def spring(mass, px, py):
         nonlocal vel
         height, width = mass.shape
 
-        if mass[height // 4, width // 2] < 1e0:
-            vel += step
+        if mass[height // 4 * 1, width // 2] < 1e0:
             py[1, width // 2] = mass[1, width // 2] * vel
-        else:
+
+        if mass[height // 4 * 1, width // 2] < 1e-1:
+            vel += step
+        
+        if mass[height // 4 * 3, width // 2] > 1e-2:
             vel -= step
 
         return (mass, px, py)

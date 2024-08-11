@@ -3,10 +3,6 @@ import numpy as np
 def goodiv(x, minv=1e-8):
     return np.maximum(x, minv)
 
-def friction(px, py, mu):
-    # working
-    return (px, py)
-
 def diffusion(m, px, py, dr, pc):
     # mass transition
     dmx = np.diff(m, axis=1) * dr
@@ -119,7 +115,7 @@ def randn_status_init(height, width):
     return (mass, px, py)
 
 class FluidGrid:
-    def __init__(self, height, width, dr=0.025, pc=0.2, vk=0.99, g=0.2, dt=0.2, mu=0.2,  
+    def __init__(self, height, width, dr=0.025, pc=0.2, vk=0.99, g=0.2, dt=0.2,  
                  status_init_func=randn_status_init, status_update_func=None):
         self.height = height
         self.width = width
@@ -128,7 +124,6 @@ class FluidGrid:
         self.vel_keep = vk
         self.g = g
         self.mmdt = dt
-        self.mu = mu
         self.X, self.Y = np.meshgrid(np.arange(width), np.arange(height))
 
         self.mass, self.px, self.py = status_init_func(height, width)
@@ -145,11 +140,6 @@ class FluidGrid:
         if pc == None:
             pc = self.pressC
         self.mass, self.px, self.py = diffusion(self.mass, self.px, self.py, dr, pc)
-
-        # friction
-        if mu == None:
-            mu = self.mu
-        self.px, self.py = friction(self.px, self.py, mu)
 
         # gravity
         if g == None:
