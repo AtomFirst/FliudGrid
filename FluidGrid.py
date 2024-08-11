@@ -4,23 +4,13 @@ def goodiv(x, minv=1e-8):
     return np.maximum(x, minv)
 
 def friction(px, py, mu):
-    dpx = np.diff(px, axis=1) * mu
-    dpy = np.diff(py, axis=0) * mu
-
-    rpx = px.copy()
-    rpy = py.copy()
-    rpx[:, :-1] += dpx
-    rpx[:, 1:] -= dpx
-    rpy[:-1, ] += dpy
-    rpy[1:, ] -= dpy
-
-    return (rpx, rpy)
+    # working
+    return (px, py)
 
 def diffusion(m, px, py, dr, pc):
+    # mass transition
     dmx = np.diff(m, axis=1) * dr
     dmy = np.diff(m, axis=0) * dr
-
-    # mass transition
     rm = m.copy()
     rm[:, :-1] += dmx
     rm[:, 1:] -= dmx
@@ -28,27 +18,33 @@ def diffusion(m, px, py, dr, pc):
     rm[1:, ] -= dmy
     
     # momentum transition 
+    dpxx = np.diff(px, axis=1) * dr
+    dpxy = np.diff(px, axis=0) * dr
     rpx = px.copy()
-    # r2l means moving from right cells to left cells
-    m = goodiv(m)
-    dpxr2l = (dmx > 0) * dmx / m[:, 1:] * px[:, 1:]
-    dpxl2r = (dmx < 0) * (-dmx) / m[:, :-1] * px[:, :-1]
-    rpx[:, :-1] += dpxr2l - dpxl2r
-    rpx[:, 1:] += dpxl2r - dpxr2l
+    rpx[:, :-1] += dpxx
+    rpx[:, 1:] -= dpxx
+    rpx[:-1, ] += dpxy
+    rpx[1:, ] -= dpxy
+
+    dpyx = np.diff(py, axis=1) * dr
+    dpyy = np.diff(py, axis=0) * dr
     rpy = py.copy()
-    dpyu2d = (dmy > 0) * dmy / m[1:, ] * px[1:, ]
-    dpyd2u = (dmy < 0) * (-dmy) / m[:-1, ] * px[:-1, ]
-    rpy[:-1, ] += dpyu2d - dpyd2u
-    rpy[1:, ] += dpyd2u -dpyu2d
+    rpy[:, :-1] += dpyx
+    rpy[:, 1:] -= dpyx
+    rpy[:-1, ] += dpyy
+    rpy[1:, ] -= dpyy
 
     # pressure do work
-    rpx += (-np.sqrt(np.hstack((m[:, 1:], m[:, -1].reshape(-1, 1))) * dr)
-    + np.sqrt(np.hstack((m[:, 0].reshape(-1, 1), m[:, :-1])) * dr)
-    ) * pc
+    k = np.sqrt(dr) * pc
+    rpx[:, :-1] -= np.sqrt(m[:, 1:]) * k
+    rpx[:, -1] -= np.sqrt(m[:, -1]) * k
+    rpx[:, 0] += np.sqrt(m[:, 0]) * k
+    rpx[:, 1:] += np.sqrt(m[:, :-1]) * k
 
-    rpy += (-np.sqrt(np.vstack((m[1:, ], m[-1, ])) * dr)
-    + np.sqrt(np.vstack((m[0, ], m[:-1, ])) * dr)
-    ) * pc
+    rpy[:-1, ] -= np.sqrt(m[1:, ]) * k
+    rpy[-1, ] -= np.sqrt(m[-1, ]) * k
+    rpy[0, ] += np.sqrt(m[0, ]) * k
+    rpy[1:, ] += np.sqrt(m[:-1, ]) * k
 
     return (rm, rpx, rpy)
 
@@ -123,7 +119,7 @@ def randn_status_init(height, width):
     return (mass, px, py)
 
 class FluidGrid:
-    def __init__(self, height, width, dr=0.025, pc=0.2, vk=0.99, g=0.2, dt=0.2, mu=0.1,  
+    def __init__(self, height, width, dr=0.025, pc=0.2, vk=0.99, g=0.2, dt=0.2, mu=0.2,  
                  status_init_func=randn_status_init, status_update_func=None):
         self.height = height
         self.width = width
