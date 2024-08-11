@@ -34,13 +34,13 @@ def render(step):
 
     if vel_show:
         fg.pl = FluidGrid.goodiv(fg.pl)
-        q.set_UVC(fg.px / fg.pl, fg.py / fg.pl, fg.pl)
+        q.set_UVC(fg.px / fg.pl, fg.py / fg.pl)
     
     tx.set_text('Frame {}'.format(step))
     #print('rendering {} frame...'.format(step))
 
 def animation(step):
-    for _ in range(2):
+    for _ in range(3):
         fg.update()
     render(step)
 
@@ -64,14 +64,14 @@ def main():
     dynamic_color = args.dynamic_color
     vel_show = args.vel_show
 
-    # fg init here!
+    # fg init here >>>
     fg = FluidGrid.FluidGrid(
         siz, siz, 
-        #g=0,
+        #g=0.0,
         #status_init_func=center33,
         status_update_func=make_spring(),
         )
-
+    # <<< fg init here
     img = ax.imshow(fg.mass,
                     cmap='coolwarm',
                     origin='lower',
@@ -81,7 +81,7 @@ def main():
 
     if vel_show:
         fg.pl = FluidGrid.goodiv(fg.pl)
-        q = ax.quiver(fg.X, fg.Y, fg.px / fg.pl, fg.py / fg.pl, fg.pl, scale=siz * 2.5, pivot='mid')
+        q = ax.quiver(fg.X, fg.Y, fg.px / fg.pl, fg.py / fg.pl, scale=siz * 1.0, pivot='mid')
 
     # animation
     ani = FuncAnimation(fig, animation, frames=frames, interval=interval)
