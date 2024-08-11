@@ -4,8 +4,8 @@ a very simple fliud simulation, coding...
 
 how to use
 ```bash
-python main.py -sc -nv -s=201
+python main.py -sc -s=49
 ```
 
-you may see this later: (not last version)
-![](./figures/spring201.png)
+you may see this later:
+![](./figures/f49.png)
