@@ -95,26 +95,16 @@ def mechanical_motion(m, px, py, X, Y, dt):
     # done at last...
     return (rm, rpx, rpy)
 
-def init_status(height, width):
+def randn_status_init(height, width):
     mass = np.abs(np.random.randn(height, width))
     px = np.random.randn(height, width) * mass
     py = np.random.randn(height, width) * mass
-
-    if False:
-        mass *= 0
-        mass += 1e-3
-        mass[height // 2 - 1 : height // 2 + 2 , width // 2 - 1 : width // 2 + 2] = 1
-        px *= 0
-        py *= 0
-
-    return (mass, px, py)
-
-def update_status(mass, px, py):
+    
     return (mass, px, py)
 
 class FluidGrid:
     def __init__(self, height, width, dr=0.025, pc=0.2, vk=0.99, g=0.2, dt=0.2, 
-                 status_init_func=init_status, status_update_func=update_status):
+                 status_init_func=randn_status_init, status_update_func=None):
         self.height = height
         self.width = width
         self.diffusion_rate = dr
@@ -147,7 +137,8 @@ class FluidGrid:
         self.py -= self.mass * g * dt
 
         # personal status update
-        self.mass, self.px, self.py = self.status_update_func(self.mass, self.px, self.py)
+        if self.status_update_func != None:
+            self.mass, self.px, self.py = self.status_update_func(self.mass, self.px, self.py)
 
         # vel loss
         if vk == None:

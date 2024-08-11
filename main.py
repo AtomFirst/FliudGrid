@@ -1,3 +1,6 @@
+import argparse
+import numpy as np
+import FluidGrid
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 from matplotlib.animation import FuncAnimation
@@ -8,27 +11,12 @@ fig, ax = plt.subplots(1,1)
 div = make_axes_locatable(ax)
 cax = div.append_axes('right', '5%', '5%')
 tx = ax.set_title('start')
+
 img = None
 q = None
 dynamic_color = True
 vel_show = True
-
-import FluidGrid
-
 fg = None
-
-'''
-        # spring
-        if False:
-            if self.py[self.height // 3, self.width // 2] <= 0:
-                self.py[0, self.width // 2] += self.dd
-                self.dd += 1
-            elif self.dd > 0:
-                self.dd -= 1
-        # spring2
-        #self.py[0, self.width // 4] += 4
-        #self.px[0, self.width // 4] += 1
-'''
 
 def render(step):
     if dynamic_color:
@@ -56,8 +44,6 @@ def animation(step):
         fg.update()
     render(step)
 
-import argparse
-
 def main():
     # initialization
     parser = argparse.ArgumentParser()
@@ -73,11 +59,14 @@ def main():
     interval = args.interval
     siz = args.size
     anim = args.anim
+
     global dynamic_color, vel_show, fg, img, q
     dynamic_color = not args.static_color
     vel_show = not args.non_vel
 
-    fg = FluidGrid.FluidGrid(siz, siz)
+    # fg init here!
+    fg = FluidGrid.FluidGrid(siz, siz, status_update_func=make_spring())
+
     img = ax.imshow(fg.mass,
                     cmap='coolwarm',
                     origin='lower',
@@ -96,6 +85,42 @@ def main():
         FuncAnimation.save(ani, filename="output.mp4")
     else:
         plt.show()
+
+# Your own code begin ->
+
+def make_spring(acc=0):
+    def spring(mass, px, py):
+        nonlocal acc
+        height, width = mass.shape
+
+        if py[height // 4, width // 2] <= 0:
+            py[0, width // 2] += acc
+            acc += 1
+        elif acc > 0:
+            acc -= 1
+
+        return (mass, px, py)
+    
+    return spring
+
+def spring2(mass, px, py):
+    height, width = mass.shape
+    
+    py[0, width // 4] += 4
+    px[0, width // 4] += 1
+
+    return (mass, px, py)
+
+def center33(height, width):
+    mass = np.zeros((height, width)) + 1e-3
+    px = np.zeros((height, width))
+    py = np.zeros((height, width))
+
+    mass[height // 2 - 1 : height // 2 + 2 , width // 2 - 1 : width // 2 + 2] = 1
+
+    return (mass, px, py)
+
+# Your own code end
 
 if __name__ == '__main__':
     main()
