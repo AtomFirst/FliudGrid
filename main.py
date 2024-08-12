@@ -7,30 +7,39 @@ from matplotlib.animation import FuncAnimation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 plt.rcParams['figure.autolayout'] = True
-fig, ax = plt.subplots(1,1)
-div = make_axes_locatable(ax)
-cax = div.append_axes('right', '5%', '5%')
-tx = ax.set_title('start')
+fig, [ax1, ax2] = plt.subplots(1,2)
+div1, div2 = make_axes_locatable(ax1), make_axes_locatable(ax2)
+cax1, cax2 = div1.append_axes('right', '5%', '5%'), div2.append_axes('right', '5%', '5%')
+tx = ax1.set_title('start')
 
-img = None
+img1, img2 = None, None
 q = None
 dynamic_color = True
 vel_show = True
 fg = None
 
 def render(step):
+    global fg
+    fg.mass = FluidGrid.goodiv(fg.mass)
+    fg.E = FluidGrid.goodiv(fg.E)
     if dynamic_color:
-        global img, fg
-        fg.mass = FluidGrid.goodiv(fg.mass)
-        img = ax.imshow(fg.mass,
+        global img1, img2
+        img1 = ax1.imshow(fg.mass,
                         cmap='coolwarm',
                         origin='lower',
                         norm=colors.LogNorm()
                         )
-        cax.cla()
-        fig.colorbar(img, cax=cax)
+        img2 = ax2.imshow(fg.E / fg.mass,
+                        cmap='coolwarm',
+                        origin='lower',
+                        norm=colors.LogNorm()
+                        )
+        cax1.cla()
+        fig.colorbar(img1, cax=cax1)
+        fig.colorbar(img2, cax=cax2)
     else:
-        img.set_data(fg.mass)
+        img1.set_data(fg.mass)
+        img2.set_data(fg.E / fg.mass)
 
     if vel_show:
         fg.pl = FluidGrid.goodiv(fg.pl)
@@ -60,28 +69,36 @@ def main():
     siz = args.size
     anim = args.anim
 
-    global dynamic_color, vel_show, fg, img, q
+    global dynamic_color, vel_show, fg, img1, img2, q
     dynamic_color = args.dynamic_color
     vel_show = args.vel_show
 
     # fg init here >>>
     fg = FluidGrid.FluidGrid(
         siz, siz, 
+        #pc=0.0,
         #g=0.0,
-        #status_init_func=center33,
-        status_update_func=make_spring(),
+        status_init_func=center33,
+        status_update_func=heater,
         )
     # <<< fg init here
-    img = ax.imshow(fg.mass,
+    fg.mass = FluidGrid.goodiv(fg.mass)
+    img1 = ax1.imshow(fg.mass,
                     cmap='coolwarm',
                     origin='lower',
                     norm=colors.LogNorm()
                     )
-    fig.colorbar(img, cax=cax)
+    fig.colorbar(img1, cax=cax1)
+    img2 = ax2.imshow(fg.E / fg.mass,
+                    cmap='coolwarm',
+                    origin='lower',
+                    norm=colors.LogNorm()
+                    )
+    fig.colorbar(img2, cax=cax2)
 
     if vel_show:
         fg.pl = FluidGrid.goodiv(fg.pl)
-        q = ax.quiver(fg.X, fg.Y, fg.px / fg.pl, fg.py / fg.pl, scale=siz * 1.0, pivot='mid')
+        q = ax1.quiver(fg.X, fg.Y, fg.px / fg.pl, fg.py / fg.pl, scale=siz * 1.0, pivot='mid')
 
     # animation
     ani = FuncAnimation(fig, animation, frames=frames, interval=interval)
@@ -109,8 +126,16 @@ def spin(mass, px, py):
     py[my, mx+w//5] += mass[my, mx+w//2] * 2
     return (mass, px, py)
 
+def heater(mass, px, py, E):
+    h, w = mass.shape
+    mx1, mx2 = w//3, w//3*2
+    E[:3, mx1-1:mx1+2] *= 1.01
+    E[:3, mx2-1:mx2+2] *= 0.95
+
+    return (mass, px, py, E)
+
 def make_spring(vel=0.0, step=0.05):
-    def spring(mass, px, py):
+    def spring(mass, px, py, E):
         nonlocal vel
         height, width = mass.shape
 
@@ -123,7 +148,7 @@ def make_spring(vel=0.0, step=0.05):
         if mass[height // 4 * 3, width // 2] > 1e-2:
             vel -= step
 
-        return (mass, px, py)
+        return (mass, px, py, E)
     
     return spring
 
@@ -133,8 +158,10 @@ def center33(height, width):
     py = np.zeros((height, width))
 
     mass[height // 2 - 1 : height // 2 + 2 , width // 2 - 1 : width // 2 + 2] = 1
-
-    return (mass, px, py)
+    
+    E = (np.random.randn(height, width) * 0.1 + 1.0) * mass
+    
+    return (mass, px, py, E)
 
 # <- Your own code end
 

@@ -3,7 +3,7 @@ import numpy as np
 def goodiv(x, minv=1e-8):
     return np.maximum(x, minv)
 
-def diffusion(m, px, py, dr, pc):
+def diffusion(m, px, py, E, dr, pc):
     # mass transition
     dmx = np.diff(m, axis=1) * dr
     dmy = np.diff(m, axis=0) * dr
@@ -30,21 +30,30 @@ def diffusion(m, px, py, dr, pc):
     rpy[:-1, ] += dpyy
     rpy[1:, ] -= dpyy
 
+    # energy transition
+    dEx = np.diff(E, axis=1) * dr
+    dEy = np.diff(E, axis=0) * dr
+    rE = E.copy()
+    rE[:, :-1] += dEx
+    rE[:, 1:] -= dEx
+    rE[:-1, ] += dEy
+    rE[1:, ] -= dEy
+
     # pressure do work
     k = np.sqrt(dr) * pc
-    rpx[:, :-1] -= np.sqrt(m[:, 1:]) * k
-    rpx[:, -1] -= np.sqrt(m[:, -1]) * k
-    rpx[:, 0] += np.sqrt(m[:, 0]) * k
-    rpx[:, 1:] += np.sqrt(m[:, :-1]) * k
+    rpx[:, :-1] -= np.sqrt(E[:, 1:]) * k
+    rpx[:, -1] -= np.sqrt(E[:, -1]) * k
+    rpx[:, 0] += np.sqrt(E[:, 0]) * k
+    rpx[:, 1:] += np.sqrt(E[:, :-1]) * k
 
     rpy[:-1, ] -= np.sqrt(m[1:, ]) * k
     rpy[-1, ] -= np.sqrt(m[-1, ]) * k
     rpy[0, ] += np.sqrt(m[0, ]) * k
     rpy[1:, ] += np.sqrt(m[:-1, ]) * k
 
-    return (rm, rpx, rpy)
+    return (rm, rpx, rpy, rE)
 
-def mechanical_motion(m, px, py, X, Y, dt):
+def mechanical_motion(m, px, py, E, X, Y, dt):
     m = goodiv(m)
     dx = px / m * dt
     dy = py / m * dt
@@ -81,6 +90,7 @@ def mechanical_motion(m, px, py, X, Y, dt):
     rm = m * p00
     rpx = px * p00
     rpy = py * p00
+    rE = E * p00
     # very bad undefined behavior, made my program slower (maybe)
     def add_to(a, y, x, c):
         yy = y.reshape(-1)
@@ -91,28 +101,32 @@ def mechanical_motion(m, px, py, X, Y, dt):
     add_to(rm, Y + sdy, X, m * p0y)
     add_to(rpx, Y + sdy, X, px * p0y)
     add_to(rpy, Y + sdy, X, py * p0y)
+    add_to(rE, Y + sdy, X, E * p0y)
     add_to(rm, Y, X + sdx, m * px0)
     add_to(rpx, Y, X + sdx, px * px0)
     add_to(rpy, Y, X + sdx, py * px0)
+    add_to(rE, Y, X + sdx, E * px0)
     add_to(rm, Y + sdy, X + sdx, m * pxy)
     add_to(rpx, Y + sdy, X + sdx, px * pxy)
     add_to(rpy, Y + sdy, X + sdx, py * pxy)
+    add_to(rE, Y + sdy, X + sdx, E * pxy)
 
     # boundary
     rpx[:, 0] *= rpx[:, 0] > 0
     rpx[:, -1] *= rpx[:, -1] <0
     rpy[0, ] *= rpy[0, ] > 0
     rpy[-1, ] *= rpy[-1, ] < 0
-
+    
     # done at last...
-    return (rm, rpx, rpy)
+    return (rm, rpx, rpy, rE)
 
 def randn_status_init(height, width):
     mass = np.abs(np.random.randn(height, width))
     px = np.random.randn(height, width) * mass
     py = np.random.randn(height, width) * mass
-    
-    return (mass, px, py)
+    E = (np.random.randn(height, width) * 0.1 + 1.0) * mass
+
+    return (mass, px, py, E)
 
 class FluidGrid:
     def __init__(self, height, width, dr=0.025, pc=0.2, vk=0.99, g=0.2, dt=0.2,  
@@ -126,7 +140,7 @@ class FluidGrid:
         self.mmdt = dt
         self.X, self.Y = np.meshgrid(np.arange(width), np.arange(height))
 
-        self.mass, self.px, self.py = status_init_func(height, width)
+        self.mass, self.px, self.py, self.E = status_init_func(height, width)
         self.status_update_func = status_update_func
         self.pl = np.sqrt(self.px ** 2 + self.py ** 2)
 
@@ -139,7 +153,7 @@ class FluidGrid:
             dr = self.diffusion_rate
         if pc == None:
             pc = self.pressC
-        self.mass, self.px, self.py = diffusion(self.mass, self.px, self.py, dr, pc)
+        self.mass, self.px, self.py, self.E = diffusion(self.mass, self.px, self.py, self.E, dr, pc)
 
         # gravity
         if g == None:
@@ -150,7 +164,7 @@ class FluidGrid:
 
         # personal status update
         if self.status_update_func != None:
-            self.mass, self.px, self.py = self.status_update_func(self.mass, self.px, self.py)
+            self.mass, self.px, self.py, self.E = self.status_update_func(self.mass, self.px, self.py, self.E)
 
         # vel loss
         if vk == None:
@@ -159,8 +173,8 @@ class FluidGrid:
         self.py *= vk
         
         # mechanical motion
-        self.mass, self.px, self.py = mechanical_motion(
-            self.mass, self.px, self.py, self.X, self.Y, dt
+        self.mass, self.px, self.py, self.E = mechanical_motion(
+            self.mass, self.px, self.py, self.E, self.X, self.Y, dt
         )
 
         self.pl = np.sqrt(self.px ** 2 + self.py ** 2)
