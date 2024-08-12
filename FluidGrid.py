@@ -46,10 +46,22 @@ def diffusion(m, px, py, E, dr, pc):
     rpx[:, 0] += np.sqrt(E[:, 0]) * k
     rpx[:, 1:] += np.sqrt(E[:, :-1]) * k
 
-    rpy[:-1, ] -= np.sqrt(m[1:, ]) * k
-    rpy[-1, ] -= np.sqrt(m[-1, ]) * k
-    rpy[0, ] += np.sqrt(m[0, ]) * k
-    rpy[1:, ] += np.sqrt(m[:-1, ]) * k
+    rpy[:-1, ] -= np.sqrt(E[1:, ]) * k
+    rpy[-1, ] -= np.sqrt(E[-1, ]) * k
+    rpy[0, ] += np.sqrt(E[0, ]) * k
+    rpy[1:, ] += np.sqrt(E[:-1, ]) * k
+    '''
+    # version without sqrt
+    rpx[:, :-1] -= E[:, 1:] * k
+    rpx[:, -1] -= E[:, -1] * k
+    rpx[:, 0] += E[:, 0] * k
+    rpx[:, 1:] += E[:, :-1] * k
+
+    rpy[:-1, ] -= E[1:, ] * k
+    rpy[-1, ] -= E[-1, ] * k
+    rpy[0, ] += E[0, ] * k
+    rpy[1:, ] += E[:-1, ] * k
+    '''
 
     return (rm, rpx, rpy, rE)
 
@@ -121,10 +133,10 @@ def mechanical_motion(m, px, py, E, X, Y, dt):
     return (rm, rpx, rpy, rE)
 
 def randn_status_init(height, width):
-    mass = np.abs(np.random.randn(height, width))
+    mass = goodiv(np.random.randn(height, width) * 0.1 + 1.0)
     px = np.random.randn(height, width) * mass
     py = np.random.randn(height, width) * mass
-    E = (np.random.randn(height, width) * 0.1 + 1.0) * mass
+    E = goodiv((np.random.randn(height, width) * 0.1 + 1.0)) * mass
 
     return (mass, px, py, E)
 

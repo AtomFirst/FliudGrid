@@ -11,7 +11,7 @@ plt.rcParams['figure.figsize'] = [10, 5]
 fig, [ax1, ax2] = plt.subplots(1,2)
 div1, div2 = make_axes_locatable(ax1), make_axes_locatable(ax2)
 cax1, cax2 = div1.append_axes('right', '5%', '5%'), div2.append_axes('right', '5%', '5%')
-tx1, tx2 = ax1.set_title('pressure'), ax2.set_title('temperature')
+tx1, tx2 = ax1.set_title('mass'), ax2.set_title('temperature')
 
 img1, img2 = None, None
 q = None
@@ -24,7 +24,7 @@ def render(step):
     fg.mass = FluidGrid.goodiv(fg.mass)
     if dynamic_color:
         global img1, img2
-        img1 = ax1.imshow(fg.E,
+        img1 = ax1.imshow(fg.mass,
                         cmap='coolwarm',
                         origin='lower',
                         norm=colors.LogNorm()
@@ -46,7 +46,7 @@ def render(step):
         fg.pl = FluidGrid.goodiv(fg.pl)
         q.set_UVC(fg.px / fg.pl, fg.py / fg.pl)
     
-    tx1.set_text('Frame {}  |  pressure'.format(step))
+    tx1.set_text('Frame {}  |  mass'.format(step))
     #print('rendering {} frame...'.format(step))
 
 def animation(step):
@@ -77,14 +77,15 @@ def main():
     # fg init here >>>
     fg = FluidGrid.FluidGrid(
         siz, siz, 
-        #pc=0.0,
-        #g=0.0,
+        pc=1.0,
+        dr=0.01,
+        g=0.003,
         #status_init_func=center33,
-        status_update_func=make_spring(),
+        status_update_func=heater,
         )
     # <<< fg init here
-    
-    img1 = ax1.imshow(fg.E,
+
+    img1 = ax1.imshow(fg.mass,
                     cmap='coolwarm',
                     origin='lower',
                     norm=colors.LogNorm()
@@ -130,9 +131,9 @@ def spin(mass, px, py):
 
 def heater(mass, px, py, E):
     h, w = mass.shape
-    mx1, mx2 = w//3, w//3*2
-    E[:3, mx1-1:mx1+2] *= 1.01
-    E[:3, mx2-1:mx2+2] *= 0.95
+    my, mx1, mx2 = h//2, w//5, w//5*4
+    E[my, mx1-2:mx1+3] = mass[my, mx1-2:mx1+3] * 1.4
+    E[my, mx2-2:mx2+3] = E[my, mx2-2:mx2+3] * 0.8
 
     return (mass, px, py, E)
 
