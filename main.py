@@ -46,7 +46,7 @@ def render(step):
         fg.pl = FluidGrid.goodiv(fg.pl)
         q.set_UVC(fg.px / fg.pl, fg.py / fg.pl)
     
-    tx1.set_text('Frame {} pressure'.format(step))
+    tx1.set_text('Frame {}  |  pressure'.format(step))
     #print('rendering {} frame...'.format(step))
 
 def animation(step):
@@ -79,8 +79,8 @@ def main():
         siz, siz, 
         #pc=0.0,
         #g=0.0,
-        status_init_func=center33,
-        status_update_func=heater,
+        #status_init_func=center33,
+        status_update_func=make_spring(),
         )
     # <<< fg init here
     
@@ -90,7 +90,7 @@ def main():
                     norm=colors.LogNorm()
                     )
     fig.colorbar(img1, cax=cax1)
-    
+
     img2 = ax2.imshow(fg.E / fg.mass,
                     cmap='coolwarm',
                     origin='lower',
