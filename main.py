@@ -7,10 +7,11 @@ from matplotlib.animation import FuncAnimation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 plt.rcParams['figure.autolayout'] = True
+plt.rcParams['figure.figsize'] = [10, 5]
 fig, [ax1, ax2] = plt.subplots(1,2)
 div1, div2 = make_axes_locatable(ax1), make_axes_locatable(ax2)
 cax1, cax2 = div1.append_axes('right', '5%', '5%'), div2.append_axes('right', '5%', '5%')
-tx = ax1.set_title('start')
+tx1, tx2 = ax1.set_title('pressure'), ax2.set_title('temperature')
 
 img1, img2 = None, None
 q = None
@@ -21,10 +22,9 @@ fg = None
 def render(step):
     global fg
     fg.mass = FluidGrid.goodiv(fg.mass)
-    fg.E = FluidGrid.goodiv(fg.E)
     if dynamic_color:
         global img1, img2
-        img1 = ax1.imshow(fg.mass,
+        img1 = ax1.imshow(fg.E,
                         cmap='coolwarm',
                         origin='lower',
                         norm=colors.LogNorm()
@@ -35,6 +35,7 @@ def render(step):
                         norm=colors.LogNorm()
                         )
         cax1.cla()
+        cax2.cla()
         fig.colorbar(img1, cax=cax1)
         fig.colorbar(img2, cax=cax2)
     else:
@@ -45,7 +46,7 @@ def render(step):
         fg.pl = FluidGrid.goodiv(fg.pl)
         q.set_UVC(fg.px / fg.pl, fg.py / fg.pl)
     
-    tx.set_text('Frame {}'.format(step))
+    tx1.set_text('Frame {} pressure'.format(step))
     #print('rendering {} frame...'.format(step))
 
 def animation(step):
@@ -82,13 +83,14 @@ def main():
         status_update_func=heater,
         )
     # <<< fg init here
-    fg.mass = FluidGrid.goodiv(fg.mass)
-    img1 = ax1.imshow(fg.mass,
+    
+    img1 = ax1.imshow(fg.E,
                     cmap='coolwarm',
                     origin='lower',
                     norm=colors.LogNorm()
                     )
     fig.colorbar(img1, cax=cax1)
+    
     img2 = ax2.imshow(fg.E / fg.mass,
                     cmap='coolwarm',
                     origin='lower',
